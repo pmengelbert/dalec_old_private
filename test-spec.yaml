@@ -1,0 +1,21 @@
+# syntax=bkpkg:mariner2
+Name: moby-tini
+Dependencies:
+  Build:
+    - cmake
+    - glibc-static
+Sources:
+  tini:
+    Ref: 'https://github.com/krallin/tini#v0.19.0'
+BuildSteps:
+  - Mounts:
+      tini: /build/src
+    Workdir: /build/src
+    Steps:
+      - Command: mkdir -vp build
+      - Command: 'set -e; cd build; cmake ..; make tini-static'
+    Outputs:
+      /usr/bin/docker-init:
+        Type: exe
+        Includes:
+          - /build/src/build/tini-static

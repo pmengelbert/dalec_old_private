@@ -1,11 +1,11 @@
 package frontend
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 
 	spb "github.com/moby/buildkit/sourcepolicy/pb"
+	"sigs.k8s.io/yaml"
 )
 
 // Spec is the specification for a package build.
@@ -166,7 +166,7 @@ func LoadSpec(dt []byte) (*Spec, error) {
 	i++
 
 	var spec Spec
-	if err := json.Unmarshal(dt[i:], &spec); err != nil {
+	if err := yaml.Unmarshal(dt[i:], &spec); err != nil {
 		return nil, err
 	}
 	fmt.Fprintln(os.Stderr, "spec", spec)

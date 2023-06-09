@@ -9,7 +9,6 @@ import (
 	"github.com/moby/buildkit/exporter/containerimage/image"
 	"github.com/moby/buildkit/frontend/dockerui"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
-	"github.com/opencontainers/go-digest"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 )
 
@@ -31,7 +30,6 @@ func Build(ctx context.Context, client gwclient.Client) (*gwclient.Result, error
 		}
 
 		spec, err := frontend.LoadSpec(dt)
-		client.Warn(ctx, digest.FromBytes([]byte{}), fmt.Sprintf("spec: %#v", spec), gwclient.WarnOpts{Level: 999, URL: fmt.Sprintf("spec: %#v", spec)})
 		if err != nil {
 			return nil, nil, fmt.Errorf("error loading spec: %w", err)
 		}
