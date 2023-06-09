@@ -17,6 +17,12 @@ func Convert(ctx context.Context, spec *frontend.Spec) (llb.State, *image.Image,
 			"tdnf", "install", "-y", "build-essential", "rpmdevtools",
 		})).State
 
+	depsCmd := []string{"tdnf", "install", "-y"}
+	for _, dep := range spec.Dependendencies.Build {
+		depsCmd = append(depsCmd, dep)
+	}
+	base = base.Run(llb.Args(depsCmd)).State
+
 	return base, &image.Image{
 		Image: ocispecs.Image{},
 		Config: image.ImageConfig{

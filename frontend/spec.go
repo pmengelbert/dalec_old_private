@@ -1,9 +1,10 @@
 package frontend
 
 import (
-	"cuelang.org/go/cue"
-	"cuelang.org/go/cue/cuecontext"
-	"cuelang.org/go/encoding/gocode/gocodec"
+	"encoding/json"
+	"fmt"
+	"os"
+
 	spb "github.com/moby/buildkit/sourcepolicy/pb"
 )
 
@@ -152,17 +153,27 @@ type Filters struct {
 }
 
 func LoadSpec(dt []byte) (*Spec, error) {
-	cuectx := cuecontext.New()
-	v := cuectx.CompileBytes(dt)
+	// cuectx := cuecontext.New()
+	// v := cuectx.CompileBytes(dt)
 
-	var r cue.Runtime
-	var cfg gocodec.Config
-	codec := gocodec.New(&r, &cfg)
+	// var r cue.Runtime
+	// var cfg gocodec.Config
+	// codec := gocodec.New(&r, &cfg)
+
+	var i int
+	for i = 0; i < len(dt) && dt[i] != byte('\n'); i++ {
+	}
+	i++
 
 	var spec Spec
-	if err := codec.Encode(v, &spec); err != nil {
+	if err := json.Unmarshal(dt[i:], &spec); err != nil {
 		return nil, err
 	}
+	fmt.Fprintln(os.Stderr, "spec", spec)
+	// if err := codec.Encode(v, &spec); err != nil {
+	// 	return nil, err
+	// }
+
 	return &spec, nil
 }
 

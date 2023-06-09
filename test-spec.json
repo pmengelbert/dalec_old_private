@@ -1,4 +1,9 @@
 # syntax=bkpkg:mariner2
 {
-    "Name": "test-pkg"
+    "Name": "test-pkg",
+    "Dependendencies": {
+        "Build": [
+            "nano"
+        ]
+    }
 }
