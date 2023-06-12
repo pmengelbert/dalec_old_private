@@ -11,25 +11,27 @@ import (
 // Spec is the specification for a package build.
 type Spec struct {
 	// Name is the name of the package.
-	Name string
+	Name string `json:"name"`
 	// Description is a short description of the package.
-	Description string
+	Description string `json:"description"`
 	// Website is the URL to store in the metadata of the package.
-	Website string
+	Website string `json:"website"`
+	// Version is the package version. Must be a valid semver
+	Version string `json:"version"`
 
 	// Dependencies are the different dependencies that need to be specified in the package.
-	Dependencies PackageDependencies
+	Dependencies PackageDependencies `json:"dependencies"`
 
 	// Conflicts is the list of packages that conflict with the generated package.
 	// This will prevent the package from being installed if any of these packages are already installed or vice versa.
-	Conflicts []string
+	Conflicts []string `json:"conflicts"`
 	// Replaces is the list of packages that are replaced by the generated package.
-	Replaces []string
+	Replaces []string `json:"replaces"`
 	// Provides is the list of things that the generated package provides.
 	// This can be used to satisfy dependencies of other packages.
 	// As an example, the moby-runc package provides "runc", other packages could depend on "runc" and be satisfied by moby-runc.
 	// This is an advanced use case and consideration should be taken to ensure that the package actually provides the thing it claims to provide.
-	Provides []string
+	Provides []string `json:"provides"`
 
 	// Sources is the list of sources to use to build the artifact(s).
 	// The map key is the name of the source and the value is the source configuration.
@@ -37,14 +39,14 @@ type Spec struct {
 	// This can be mounted into the build using the "Mounts" field in the StepGroup.
 	//
 	// Sources can be embedded in the main spec as here or overriden in a build request.
-	Sources map[string]Source
+	Sources map[string]Source `json:"sources"`
 
 	// BuildSteps is the list of build steps to run to build the artifact(s).
 	// Each entry may be run in parallel and will not share state with each other.
-	BuildSteps []StepGroup
+	BuildSteps []StepGroup `json:"buildSteps"`
 
 	// SourcePolicy is used to approve/deny/rewrite sources used by a build.
-	SourcePolicy *spb.Policy
+	SourcePolicy *spb.Policy `json:"sourcePolicy"`
 }
 
 // Source defines a source to be used in the build.
@@ -52,14 +54,14 @@ type Spec struct {
 type Source struct {
 	// Ref is a unique identifier for the source.
 	// example: "docker-image://busybox:latest", "https://github.com/moby/moby.git#master", "local://some/local/path
-	Ref string
+	Ref string `json:"ref"`
 	// Path is the path to the source after fetching it based on the identifier.
-	Path string
+	Path string `json:"path"`
 	// Filters is used to filter the files to include/exclude from beneath "Path".
-	Filters
+	Filters `json:"filters"`
 	// Satisfies is the list of build dependencies that this source satisfies.
 	// This needs to match the name of the dependency in the PackageDependencies.Build list.
-	Satisfies []string
+	Satisfies []string `json:"satisfies"`
 }
 
 // PackageDependencies is a list of dependencies for a package.
@@ -67,38 +69,38 @@ type Source struct {
 // It also includes build-time dedendencies, which we'll install before running any build steps.
 type PackageDependencies struct {
 	// Build is the list of packagese required to build the package.
-	Build []string
+	Build []string `json:"build"`
 	// Runtime is the list of packages required to install/run the package.
-	Runtime []string
+	Runtime []string `json:"runtime"`
 	// Recommends is the list of packages recommended to install with the generated package.
 	// Note: Not all package managers support this (e.g. rpm)
-	Recommends []string
+	Recommends []string `json:"recommends"`
 }
 
 // StepGroup configures a group of steps that are run sequentially along with their outputs to build the artifact(s).
 type StepGroup struct {
 	// Steps is the list of commands to run to build the artifact(s).
 	// Each step is run sequentially and will be cached accordingly.
-	Steps []BuildStep
+	Steps []BuildStep `json:"steps"`
 	// List of CacheDirs which will be used across all Steps
-	CacheDirs map[string]CacheDirConfig
+	CacheDirs map[string]CacheDirConfig `json:"cacheDirs"`
 	// Outputs is the list of artifacts to be extracted after running the steps.
-	Outputs map[string]ArtifactConfig
+	Outputs map[string]ArtifactConfig `json:"outputs"`
 	// Mounts is the list of sources to mount into the build.
 	// The map key is the name of the source to mount and the value is the path to mount it to.
-	Mounts map[string]string
+	Mounts map[string]string `json:"mounts"`
 	// Workdir specifies the working directory that each new command will run in within this step group
-	WorkDir string
+	WorkDir string `json:"workDir"`
 }
 
 // BuildStep is used to execute a command to build the artifact(s).
 type BuildStep struct {
 	// Command is the command to run to build the artifact(s).
 	// This will always be wrapped as /bin/sh -c "<command>", or whatever the equivalent is for the target distro.
-	Command string
+	Command string `json:"command"`
 	// CacheDirs is the list of CacheDirs which will be used for this build step.
 	// Note that this list will be merged with the list of CacheDirs from the StepGroup.
-	CacheDirs map[string]CacheDirConfig
+	CacheDirs map[string]CacheDirConfig `json:"cacheDirs"`
 }
 
 // CacheDirConfig configures a persistent cache to be used across builds.
@@ -106,18 +108,18 @@ type CacheDirConfig struct {
 	// Mode is the locking mode to set on the cache directory
 	// values: shared, private, locked
 	// default: shared
-	Mode string
+	Mode string `json:"mode"`
 	// Key is the cache key to use to cache the directory
 	// default: Value of `Path`
-	Key string
+	Key string `json:"key"`
 	// IncludeDistroKey is used to include the distro key as part of the cache key
 	// What this key is depends on the frontend implementation
 	// Example for Debian Buster may be "buster"
-	IncludeDistroKey bool
+	IncludeDistroKey bool `json:"includeDistroKey"`
 	// IncludeArchKey is used to include the architecture key as part of the cache key
 	// What this key is depends on the frontend implementation
 	// Frontends SHOULD use the buildkit platform arch
-	IncludeArchKey bool
+	IncludeArchKey bool `json:"includeArchKey"`
 }
 
 type ArtifactType string
@@ -139,17 +141,17 @@ var (
 // ArtifactConfig is used to configure how to extract an artifact and whatit is
 type ArtifactConfig struct {
 	// ArtifactType defines the type of artifact this is and will determine how to handle it in the package
-	Type ArtifactType
-	Filters
+	Type    ArtifactType `json:"type"`
+	Filters `json:",inline"`
 }
 
 // Filters is used to filter the files to include/exclude from a directory.
 type Filters struct {
 	// Includes is a list of paths underneath `Path` to include, everything else is execluded
 	// If empty, everything is included (minus the excludes)
-	Includes []string
+	Includes []string `json:"includes"`
 	// Excludes is a list of paths underneath `Path` to exclude, everything else is included
-	Excludes []string
+	Excludes []string `json:"excludes"`
 }
 
 func LoadSpec(dt []byte) (*Spec, error) {

@@ -1,21 +1,34 @@
 # syntax=bkpkg:mariner2
-Name: moby-tini
-Dependencies:
-  Build:
+name: moby-tini
+version: "v0.19.0"
+website: "https://github.com/krallin/tini"
+dependencies:
+  build:
     - cmake
     - glibc-static
-Sources:
+sources:
   tini:
-    Ref: 'https://github.com/krallin/tini#v0.19.0'
-BuildSteps:
-  - Mounts:
+    ref: 'https://github.com/krallin/tini#v0.19.0'
+buildSteps:
+  - mounts:
       tini: /build/src
-    Workdir: /build/src
-    Steps:
-      - Command: mkdir -vp build
-      - Command: 'set -e; cd build; cmake ..; make tini-static'
-    Outputs:
+    workdir: /build/src
+    steps:
+      - command: mkdir -vp build
+      - command: |
+          set -e
+
+          cd build
+          cmake ..
+          make tini-static
+    outputs:
       /usr/bin/docker-init:
-        Type: exe
-        Includes:
+        type: exe
+        includes:
           - /build/src/build/tini-static
+description: |
+  Tini is the simplest init you could think of.
+  .
+  All Tini does is spawn a single child (Tini is meant to be run in a
+  container), and wait for it to exit all the while reaping zombies and
+  performing signal forwarding.
