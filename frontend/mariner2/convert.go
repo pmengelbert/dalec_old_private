@@ -48,6 +48,11 @@ find %{buildroot} | sed -E 's#^%{buildroot}##g' > ./files
 - First draft
 `
 
+type SourceState struct {
+	frontend.Source
+	s llb.State
+}
+
 func Convert(ctx context.Context, spec *frontend.Spec) (llb.State, *image.Image, error) {
 	base := llb.Image(imgRef).
 		Run(llb.Args([]string{
@@ -60,12 +65,29 @@ func Convert(ctx context.Context, spec *frontend.Spec) (llb.State, *image.Image,
 	}
 	base = base.Run(llb.Args(depsCmd)).State
 
-	sourceStates := make(map[string]llb.State)
+	sourceStates := make(map[string]SourceState)
 	for name, src := range spec.Sources {
 		if src.Ref != "" {
-			repo, tag, _ := strings.Cut(src.Ref, "#")
-			gitState := llb.Git(repo, tag)
-			sourceStates[name] = gitState
+			scheme, ref, ok := strings.Cut(src.Ref, "://")
+			if !ok {
+				// treat as local file
+				scheme = "local"
+			}
+
+			var s llb.State
+			switch scheme {
+			case "local":
+				s = llb.Local("context", llb.FollowPaths([]string{ref}))
+			case "https", "git":
+				repo, tag, _ := strings.Cut(ref, "#")
+				s = llb.Git(repo, tag)
+			case "docker-image":
+				s = llb.Image(ref)
+			default:
+				return s, nil, fmt.Errorf("invalid scheme for source: '%s'", scheme)
+			}
+
+			sourceStates[name] = SourceState{Source: src, s: s}
 		}
 	}
 
@@ -73,7 +95,7 @@ func Convert(ctx context.Context, spec *frontend.Spec) (llb.State, *image.Image,
 	out := llb.Scratch()
 	for i := range spec.BuildSteps {
 		for name, dir := range spec.BuildSteps[i].Mounts {
-			build = build.File(llb.Copy(sourceStates[name], "/", dir, &llb.CopyInfo{
+			build = build.File(llb.Copy(sourceStates[name].s, sourceStates[name].Source.Path, dir, &llb.CopyInfo{
 				CreateDestPath: true,
 			}))
 		}
@@ -119,11 +141,14 @@ func buildPackage(base, in llb.State, spec *frontend.Spec) llb.State {
 		"tar", "-czf", "./SOURCES/archive.tar.gz", "archive/",
 	})).State
 
+	// Because the description can be multiline, it has to be injected rather
+	// than passed in on the command line.
 	t, _ := template.New("spec").Parse(rpmSpec)
 	b := new(bytes.Buffer)
 	t.Execute(b, spec)
 	build = build.File(llb.Mkfile("/build/pkg.spec", 0o644, b.Bytes()))
 
+	// The rest of the variables can use the native rpmbuild templating system.
 	build = build.Run(llb.Args([]string{
 		"rpmbuild", "-bb",
 		"--define", rpmOpt("_topdir", "/build"),

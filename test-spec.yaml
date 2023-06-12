@@ -8,15 +8,19 @@ dependencies:
     - glibc-static
 sources:
   tini:
-    ref: 'https://github.com/krallin/tini#v0.19.0'
+    ref: 'git://github.com/krallin/tini#v0.19.0'
+  legal:
+    ref: 'local://tmp/licenses'
+    path: 'tmp/licenses'
 buildSteps:
   - mounts:
       tini: /build/src
+      legal: /build/legal
     workdir: /build/src
     steps:
       - command: mkdir -vp build
       - command: |
-          set -e
+          set -ex
 
           cd build
           cmake ..
@@ -26,6 +30,14 @@ buildSteps:
         type: exe
         includes:
           - /build/src/build/tini-static
+      /usr/share/doc/moby-tini/LICENSE:
+        type: exe
+        includes:
+          - /build/legal/LICENSE
+      /usr/share/doc/moby-tini/NOTICE:
+        type: exe
+        includes:
+          - /build/legal/NOTICE
 description: |
   Tini is the simplest init you could think of.
   .

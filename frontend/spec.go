@@ -58,7 +58,7 @@ type Source struct {
 	// Path is the path to the source after fetching it based on the identifier.
 	Path string `json:"path"`
 	// Filters is used to filter the files to include/exclude from beneath "Path".
-	Filters `json:"filters"`
+	Filters `json:",inline"`
 	// Satisfies is the list of build dependencies that this source satisfies.
 	// This needs to match the name of the dependency in the PackageDependencies.Build list.
 	Satisfies []string `json:"satisfies"`
