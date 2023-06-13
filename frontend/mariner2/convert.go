@@ -78,13 +78,16 @@ func Convert(ctx context.Context, spec *frontend.Spec) (llb.State, *image.Image,
 			switch scheme {
 			case "local":
 				s = llb.Local("context", llb.FollowPaths([]string{ref}))
-			case "https", "git":
+			case "http", "https":
+				// include scheme
+				s = llb.HTTP(src.Ref)
+			case "git":
 				repo, tag, _ := strings.Cut(ref, "#")
 				s = llb.Git(repo, tag)
 			case "docker-image":
 				s = llb.Image(ref)
 			default:
-				return s, nil, fmt.Errorf("invalid scheme for source: '%s'", scheme)
+				return s, nil, fmt.Errorf("invalid scheme for source '%s': '%s'", name, scheme)
 			}
 
 			sourceStates[name] = SourceState{Source: src, s: s}
@@ -109,14 +112,11 @@ func Convert(ctx context.Context, spec *frontend.Spec) (llb.State, *image.Image,
 		}
 
 		for path, output := range spec.BuildSteps[i].Outputs {
-			if output.Type != frontend.ArtifactTypeExecutable {
-				continue
-			}
-
-			dstDir := filepath.Dir(path)
-			out = out.File(llb.Mkdir(dstDir, 0o755, llb.WithParents(true)))
-			for _, incl := range output.Includes {
-				out = out.File(llb.Copy(build, incl, path))
+			switch output.Type {
+			case frontend.ArtifactTypeExecutable:
+				out = outputExe(path, out, output, build)
+			case frontend.ArtifactTypeText:
+				out = outputText(path, out, output, build)
 			}
 		}
 	}
@@ -129,6 +129,24 @@ func Convert(ctx context.Context, spec *frontend.Spec) (llb.State, *image.Image,
 			ImageConfig: ocispecs.ImageConfig{},
 		},
 	}, nil
+}
+
+func outputExe(path string, out llb.State, output frontend.ArtifactConfig, build llb.State) llb.State {
+	dstDir := filepath.Dir(path)
+	out = out.File(llb.Mkdir(dstDir, 0o755, llb.WithParents(true)))
+	for _, incl := range output.Includes {
+		out = out.File(llb.Copy(build, incl, path))
+	}
+	return out
+}
+
+func outputText(path string, out llb.State, output frontend.ArtifactConfig, build llb.State) llb.State {
+	dstDir := filepath.Dir(path)
+	out = out.File(llb.Mkdir(dstDir, 0o644, llb.WithParents(true)))
+	for _, incl := range output.Includes {
+		out = out.File(llb.Copy(build, incl, path))
+	}
+	return out
 }
 
 func buildPackage(base, in llb.State, spec *frontend.Spec) llb.State {

@@ -31,11 +31,11 @@ buildSteps:
         includes:
           - /build/src/build/tini-static
       /usr/share/doc/moby-tini/LICENSE:
-        type: exe
+        type: text
         includes:
           - /build/legal/LICENSE
       /usr/share/doc/moby-tini/NOTICE:
-        type: exe
+        type: text
         includes:
           - /build/legal/NOTICE
 description: |

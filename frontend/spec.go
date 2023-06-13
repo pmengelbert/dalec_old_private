@@ -136,6 +136,7 @@ var (
 	// ArtifactTypeContrib is used to install a contrib file
 	ArtifactTypeContrib ArtifactType = "contrib"
 	// TODO: others TBD, eg config files, licenses, notices, libexec, etc
+	ArtifactTypeText ArtifactType = "text"
 )
 
 // ArtifactConfig is used to configure how to extract an artifact and whatit is
