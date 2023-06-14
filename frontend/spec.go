@@ -4,9 +4,37 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/moby/buildkit/client/llb"
 	spb "github.com/moby/buildkit/sourcepolicy/pb"
 	"sigs.k8s.io/yaml"
 )
+
+type Merger interface {
+	Merge([]llb.State) llb.State
+}
+
+type CopyMerger struct{}
+
+func (_ *CopyMerger) Merge(s []llb.State) llb.State {
+	if len(s) == 0 {
+		return llb.Scratch()
+	}
+
+	state := s[0]
+	for i := 1; i < len(s); i++ {
+		state = state.File(llb.Copy(s[i], "/", "/"))
+	}
+
+	return state
+}
+
+var cm Merger = &CopyMerger{}
+
+type MergeMerger struct{}
+
+func (_ *MergeMerger) Merge(s []llb.State) llb.State {
+	return llb.Merge(s)
+}
 
 // Spec is the specification for a package build.
 type Spec struct {

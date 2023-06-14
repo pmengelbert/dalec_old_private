@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"path/filepath"
 	"strings"
 	"text/template"
 
@@ -53,7 +52,7 @@ type SourceState struct {
 	s llb.State
 }
 
-func Convert(ctx context.Context, spec *frontend.Spec) (llb.State, *image.Image, error) {
+func Convert(ctx context.Context, spec *frontend.Spec, merger frontend.Merger) (llb.State, *image.Image, error) {
 	base := llb.Image(imgRef).
 		Run(llb.Args([]string{
 			"tdnf", "install", "-y", "build-essential", "rpmdevtools",
@@ -94,34 +93,46 @@ func Convert(ctx context.Context, spec *frontend.Spec) (llb.State, *image.Image,
 		}
 	}
 
-	build := base
-	out := llb.Scratch()
+	diffs := []llb.State{base}
 	for i := range spec.BuildSteps {
+		stepBuild := base
 		for name, dir := range spec.BuildSteps[i].Mounts {
-			build = build.File(llb.Copy(sourceStates[name].s, sourceStates[name].Source.Path, dir, &llb.CopyInfo{
+			stepBuild = stepBuild.File(llb.Copy(sourceStates[name].s, sourceStates[name].Source.Path, dir, &llb.CopyInfo{
 				CreateDestPath: true,
 			}))
 		}
 
 		wd := spec.BuildSteps[i].WorkDir
-		build = build.File(llb.Mkdir(wd, 0o755, llb.WithParents(true)))
-		build = build.Dir(wd)
+		stepBuild = stepBuild.File(llb.Mkdir(wd, 0o755, llb.WithParents(true)))
+		stepBuild = stepBuild.Dir(wd)
 
 		for j := range spec.BuildSteps[i].Steps {
-			build = build.Run(llb.Args([]string{"/usr/bin/env", "sh", "-c", spec.BuildSteps[i].Steps[j].Command})).State
+			stepBuild = stepBuild.Run(llb.Args([]string{"/usr/bin/env", "sh", "-c", spec.BuildSteps[i].Steps[j].Command})).State
 		}
 
+		diffs = append(diffs, llb.Diff(base, stepBuild))
+	}
+
+	build := merger.Merge(diffs)
+
+	scratch := llb.Scratch()
+	outs := []llb.State{scratch}
+	for i := range spec.BuildSteps {
+		stepOut := scratch
 		for path, output := range spec.BuildSteps[i].Outputs {
 			switch output.Type {
 			case frontend.ArtifactTypeExecutable:
-				out = outputExe(path, out, output, build)
+				stepOut = outputExe(path, stepOut, output, build)
 			case frontend.ArtifactTypeText:
-				out = outputText(path, out, output, build)
+				stepOut = outputText(path, stepOut, output, build)
 			}
 		}
+		outs = append(outs, llb.Diff(scratch, stepOut))
 	}
 
-	pkgState := buildPackage(base, out, spec)
+	out := merger.Merge(outs)
+
+	pkgState := buildPackage(build, out, spec)
 
 	return pkgState, &image.Image{
 		Image: ocispecs.Image{},
@@ -132,19 +143,15 @@ func Convert(ctx context.Context, spec *frontend.Spec) (llb.State, *image.Image,
 }
 
 func outputExe(path string, out llb.State, output frontend.ArtifactConfig, build llb.State) llb.State {
-	dstDir := filepath.Dir(path)
-	out = out.File(llb.Mkdir(dstDir, 0o755, llb.WithParents(true)))
 	for _, incl := range output.Includes {
-		out = out.File(llb.Copy(build, incl, path))
+		out = out.File(llb.Copy(build, incl, path, &llb.CopyInfo{CreateDestPath: true, AllowWildcard: true}))
 	}
 	return out
 }
 
 func outputText(path string, out llb.State, output frontend.ArtifactConfig, build llb.State) llb.State {
-	dstDir := filepath.Dir(path)
-	out = out.File(llb.Mkdir(dstDir, 0o644, llb.WithParents(true)))
 	for _, incl := range output.Includes {
-		out = out.File(llb.Copy(build, incl, path))
+		out = out.File(llb.Copy(build, incl, path, &llb.CopyInfo{CreateDestPath: true, AllowWildcard: true}))
 	}
 	return out
 }

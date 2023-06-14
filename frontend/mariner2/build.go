@@ -9,6 +9,7 @@ import (
 	"github.com/moby/buildkit/exporter/containerimage/image"
 	"github.com/moby/buildkit/frontend/dockerui"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
+	"github.com/moby/buildkit/solver/pb"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 )
 
@@ -37,7 +38,12 @@ func Build(ctx context.Context, client gwclient.Client) (*gwclient.Result, error
 			return nil, nil, err
 		}
 
-		st, img, err := Convert(ctx, spec)
+		var merger frontend.Merger = &frontend.CopyMerger{}
+		if hasMergeOp(ctx, client) {
+			merger = &frontend.MergeMerger{}
+		}
+
+		st, img, err := Convert(ctx, spec, merger)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -66,4 +72,10 @@ func Build(ctx context.Context, client gwclient.Client) (*gwclient.Result, error
 	}
 
 	return rb.Finalize()
+}
+
+func hasMergeOp(ctx context.Context, client gwclient.Client) bool {
+	capset := client.BuildOpts().LLBCaps
+	err := capset.Supports(pb.CapMergeOp)
+	return err != nil
 }

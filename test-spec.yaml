@@ -6,9 +6,15 @@ dependencies:
   build:
     - cmake
     - glibc-static
+    - device-mapper-devel
 sources:
   tini:
-    ref: 'git://github.com/krallin/tini#v0.19.0'
+    ref: 'git://github.com/krallin/tini.git#v0.19.0'
+  engine:
+    ref: 'git://github.com/moby/moby.git#v24.0.2'
+  golang:
+    ref: 'docker-image://docker.io/library/golang:1.20'
+    path: '/usr/local/go'
   legal:
     ref: 'local://tmp/licenses'
     path: 'tmp/licenses'
@@ -30,14 +36,50 @@ buildSteps:
         type: exe
         includes:
           - /build/src/build/tini-static
-      /usr/share/doc/moby-tini/LICENSE:
+      /usr/share/doc/moby-engine/:
         type: text
         includes:
           - /build/legal/LICENSE
-      /usr/share/doc/moby-tini/NOTICE:
+          - /build/legal/NOTICE
+  - mounts:
+      golang: /usr/local/go
+      engine: /build/engine
+    workdir: /build
+    steps:
+      - command: |
+          set -ex
+          export PATH=$PATH:/usr/local/go/bin
+          mkdir -vp /go
+          export GOPATH=/go
+          export GOPROXY=off GO111MODULE=off GOGC=off DOCKER_BUILDTAGS=exclude_graphdriver_btrfs
+
+          mkdir -p $GOPATH/src/github.com/docker
+          ln -s $(pwd)/engine $GOPATH/src/github.com/docker/docker
+
+          cd $GOPATH/src/github.com/docker/docker
+          CGO_ENABLED=false CC="" go build \
+                  -o libnetwork/docker-proxy \
+                  ./cmd/docker-proxy
+
+          DOCKER_GITCOMMIT=659604f9ee60f147020bdd444b26e4b5c636dc28 PRODUCT=docker hack/make.sh dynbinary
+    outputs:
+      /usr/bin/dockerd:
+        type: exe
+        includes:
+          - /build/engine/bundles/dynbinary-daemon/dockerd
+      /usr/bin/docker-proxy:
+        type: exe
+        includes:
+          - /build/engine/libnetwork/docker-proxy
+      /lib/udev/rules.d/80-moby-engine.rules:
         type: text
         includes:
-          - /build/legal/NOTICE
+          - /build/engine/contrib/udev/80-docker.rules
+      /usr/share/moby-engine/contrib/:
+        type: text
+        includes:
+          - /build/engine/contrib/nuke-graph-directory.sh
+          - /build/engine/contrib/check-config.sh
 description: |
   Tini is the simplest init you could think of.
   .
