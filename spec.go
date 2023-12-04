@@ -11,8 +11,50 @@ import (
 	"github.com/invopop/jsonschema"
 )
 
+type SourceType uint
+
+const (
+	SourceTypeDockerImage SourceType = iota
+	SourceTypeGit
+	SourceTypeHttps
+	SourceTypeBuildContext
+	SourceTypeAnotherSource
+	SourceTypeUnknown
+)
+
+const (
+	sourceStringDockerImage   = "image"
+	sourceStringGit           = "git"
+	sourceStringHttp          = "http"
+	sourceStringHttps         = "https"
+	sourceStringBuildContext  = "context"
+	sourceStringAnotherSource = "source"
+)
+
+func stringToSourceType(s, ref string) (SourceType, error) {
+	ret := SourceTypeUnknown
+	var err error
+
+	switch s {
+	case sourceStringDockerImage:
+		ret = SourceTypeDockerImage
+	case sourceStringGit:
+		ret = SourceTypeGit
+	case sourceStringHttp, sourceStringHttps:
+		ret = SourceTypeHttps
+	case sourceStringBuildContext:
+		ret = SourceTypeBuildContext
+	case sourceStringAnotherSource:
+		ret = SourceTypeAnotherSource
+	default:
+		err = fmt.Errorf("unknown source type: %q", s)
+	}
+
+	return ret, err
+}
+
 // Spec is the specification for a package build.
-type Spec struct {
+type Spec []struct {
 	// Name is the name of the package.
 	Name string `yaml:"name" json:"name" jsonschema:"required"`
 	// Description is a short description of the package.
@@ -49,6 +91,14 @@ type Spec struct {
 	//
 	// Sources can be embedded in the main spec as here or overriden in a build request.
 	Sources map[string]Source `yaml:"sources,omitempty" json:"sources,omitempty"`
+
+	// Sources is the list of sources to use to build the artifact(s).
+	// The map key is the name of the source and the value is the source configuration.
+	// The source configuration is used to fetch the source and filter the files to include/exclude.
+	// This can be mounted into the build using the "Mounts" field in the StepGroup.
+	//
+	// Sources can be embedded in the main spec as here or overriden in a build request.
+	Sources2 map[string]SourceProvider `yaml:"sources2,omitempty" json:"sources2,omitempty"`
 
 	// Patches is the list of patches to apply to the sources.
 	// The map key is the name of the source to apply the patches to.
@@ -199,6 +249,74 @@ type Source struct {
 	// The context for the build is assumed too be specified in after `build://` in the ref, e.g. `build://https://github.com/moby/buildkit.git#master`
 	// When nothing is specified after `build://`, the context is assumed to be the current build context.
 	Build *BuildSpec `yaml:"build,omitempty" json:"build,omitempty"`
+}
+
+type Sourceable interface {
+	_dalecSource()
+}
+
+type SourceProvider interface {
+	GetSource() Sourceable
+}
+
+type (
+	SourceDockerImage   string // the image ref
+	SourceGit           string // the git URL of the artifact
+	SourceHttps         string // the http/https URL of the artifact
+	SourceBuildContext  string // the name of the build context
+	SourceAnotherSource string // the name of the other source
+)
+
+func (_ SourceDockerImage) _dalecSource()   {}
+func (_ SourceGit) _dalecSource()           {}
+func (_ SourceHttps) _dalecSource()         {}
+func (_ SourceBuildContext) _dalecSource()  {}
+func (_ SourceAnotherSource) _dalecSource() {}
+
+var _1 Sourceable = SourceDockerImage("")
+var _2 Sourceable = SourceGit("")
+var _3 Sourceable = SourceHttps("")
+var _4 Sourceable = SourceBuildContext("")
+var _5 Sourceable = SourceAnotherSource("")
+
+// Source2 defines a source to be used in the build.
+// A source can be a local directory, a git repositoryt, http(s) URL, etc.
+type Source2[T Sourceable] struct {
+	sourceType SourceType
+
+	// The actual source in question
+	Source T
+
+	// Path is the path to the source after fetching it based on the identifier.
+	Path string `yaml:"path,omitempty" json:"path,omitempty"`
+
+	// Includes is a list of paths underneath `Path` to include, everything else is execluded
+	// If empty, everything is included (minus the excludes)
+	Includes []string `yaml:"includes,omitempty" json:"includes,omitempty"`
+	// Excludes is a list of paths underneath `Path` to exclude, everything else is included
+	Excludes []string `yaml:"excludes,omitempty" json:"excludes,omitempty"`
+
+	// KeepGitDir is used to keep the .git directory after fetching the source for git references.
+	KeepGitDir bool `yaml:"keep_git_dir,omitempty" json:"keep_git_dir,omitempty"`
+
+	// Cmd is used to generate the source from a command.
+	// This can be used when Ref is "docker-image://"
+	// If ref is "cmd://", this is required.
+	Cmd *CmdSpec `yaml:"cmd,omitempty" json:"cmd,omitempty"`
+
+	// Build is used to generate source from a build.
+	// This is used when [Ref]` is "build://"
+	// The context for the build is assumed too be specified in after `build://` in the ref, e.g. `build://https://github.com/moby/buildkit.git#master`
+	// When nothing is specified after `build://`, the context is assumed to be the current build context.
+	Build *BuildSpec `yaml:"build,omitempty" json:"build,omitempty"`
+}
+
+func (s *Source2[T]) SourceType() SourceType {
+	return s.sourceType
+}
+
+func (s *Source2[T]) GetSource() T {
+	return s.Source
 }
 
 func (Source) JSONSchemaExtend(schema *jsonschema.Schema) {
